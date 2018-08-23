@@ -1,0 +1,18 @@
+{
+  "name": "update-publug",
+  "version": "1.0.0",
+  "description": "retrieves data from public sources and builds a publog database in  mongodb",
+  "main": "update-publog.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "jakeflow@gmail.com",
+  "license": "ISC",
+  "dependencies": {
+    "cli-progress": "^2.1.0",
+    "line-parser": "github:jakeflow27/LineParser",
+    "mongodb": "^3.1.3",
+    "request": "^2.88.0",
+    "unzip": "^0.1.11"
+  }
+}
