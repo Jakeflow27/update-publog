@@ -8,6 +8,7 @@ var request = require('request');
 var MongoClient = require('mongodb').MongoClient;
 var assert = require('assert');
 var util = require('util');
+var Downloader = require("file-downloader");
 
 // Mongodb
 var mongoUrl = 'mongodb://localhost:27017';
@@ -19,7 +20,9 @@ var resourceDirectory =__dirname ;
 var forceDownload = false;
 var isWin = process.platform === "win32";
 request =  request.defaults({jar: true}); // allow cookies by default.
-var requestWithUA = request.defaults( {headers: {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36 Avast/68.0.746.60"}});
+
+var userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36 Avast/68.0.746.60";
+
 console.log = function log(){fs.writeSync(this._stdout.fd, util.format.apply(null,arguments) + "\n");}
 console.log(resourceDirectory);
 
@@ -30,54 +33,7 @@ if (!Array.prototype.last){
     };
 };
 
-function downloadFile(fileUrl, filePath, callback) {
-    console.log(fileUrl,"=>",filePath);
-    //var fileName = getFileName(fileUrl);
-    // p = url.parse(fileUrl);
-    // console.log(p);
-    var file = fs.createWriteStream(filePath);
-    var options = {
-        method: 'GET',
-        uri: fileUrl
-    };
-    //console.log(options);
-    var bytesDownloaded=0;
-    var r = requestWithUA(options)
-        .on('response',function(res){
-            var len = parseInt(res.headers['content-length'], 10);
-            var bar = new Progress.Bar({}, Progress.Presets.shades_classic);
-            bar.start(len, 0);
-            res.on('data', function(chunk) {
-                file.write(chunk);
-                bytesDownloaded+=chunk.length;
-                bar.update(bytesDownloaded);
-            }).on('end', function () {
-                bar.stop();
-                file.end();
-                console.log("Download complete.");
-                callback(null);
-            }).on('error', function (err) {
-                throw err;
-                file.end();
-                bar.stop();
-            });
-        })
-
-}
 function isEven(num){return num % 2 == 0}
-
-function getFileName(url) {
-    return url.split('/').pop().split('#')[0].split('?')[0];
-}
-function getRealFileName(url) {
-    return getFileName(url).split(".zip").join(".txt");
-}
-function decomp(file,callback){
-    var extractor = unzip.Extract({path:resourceDirectory});
-    fs.createReadStream(file).pipe(extractor);
-    extractor.on('close',callback)
-}
-
 
 var resources = [
     {
@@ -91,7 +47,7 @@ var resources = [
             var bar = new Progress.Bar({}, Progress.Presets.shades_classic);
             var currentNiin = {};
             // get the line processor
-            var lp = LineParser(filename);
+            var lp = LineParser(fileName);
             lp.countLines(function(count){
 
                 bar.start(count,0);
@@ -218,51 +174,12 @@ var resources = [
     }
 ]
 
-// get the real file name (chardata.zip->chardata.txt), download,downloadAndExtract or extract
-function checkResource(r,callback){
-    // console.log(r);
-    // checks if we need to download and extract the given resource
-    var downloadUrl = r["url"];
-    var downloadFileName = getFileName(downloadUrl);
-    var realFileName = downloadFileName.split(".zip").join(".txt");
-    var isZip = downloadFileName != realFileName;
-
-    fs.exists(realFileName,function(resourceExists){
-        if(resourceExists){
-            console.log('using cached',realFileName);
-            callback()
-        }
-        else{
-            if(isZip){
-                fs.exists(downloadFileName,function(zipExists){
-                    if(zipExists){
-                        // only extract
-                        console.log('extracting cached',downloadFileName)
-                        decomp(downloadFileName,callback)
-                    }
-                    else{
-                        // download and extract
-                        console.log("Download and extract...")
-                        downloadFile(downloadUrl,downloadFileName,function(){
-                            decomp(downloadFileName,callback)
-                        })
-                    }
-                })
-            }
-            else{
-                // download only
-                console.log('download only');
-                downloadFile(downloadUrl,downloadFileName,callback)
-            }
-        }
-    })
-}
-
 function processResource(callback,i){
     if(!i){i=0}
     if(i==resources.length){callback()}
     else{
         var resource = resources[i];
+
         if(forceDownload){
             var path = getFileName(resource.url);
             console.info('deleting',path);
@@ -270,7 +187,9 @@ function processResource(callback,i){
                 fs.unlinkSync(path);
             }
         }
-        checkResource(resource,function(){
+
+        new Downloader(resource.url,{progress:true,verbage:true},function(stats){
+            console.log(stats);
             resource.db = db.collection(resource.name);
             resource.parser(resource,function(){
                 processResource(callback,i+1)
@@ -281,7 +200,6 @@ function processResource(callback,i){
 }
 
 MongoClient.connect(mongoUrl, function(err, client) {
-    assert.equal(null, err);
     console.log("Connected successfully to server");
     db = client.db(dbName);
     processResource(function(){
