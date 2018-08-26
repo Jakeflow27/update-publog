@@ -40,29 +40,143 @@ function Updater(options){
     var count = 0; // num entries in the file
     console.log(`working form ${resourceDirectory}`); // used for downloads and work
 
-    var schemas = {
-        characters: {
-            name: String,
-            fsc: String,
-            niin: String,
-            nameCode: String,
-            characters: [{code:String,name:String,value:String}],
-            enacs:[String]
-        },
-        enacs: {
-            "fsc":String,
-            "niin":String,
-            "enac_3025":String,
-            "name":String,
-            "DT_NIIN_ASGMT_2180" :String,
-            "EFF_DT_2128" :String,
-            "INC_4080" :String,
-            "sos": String,
-        }
-    };
     var resources = [
         {
+            name: "cage",
+            skip:false,
+            url: "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/cagecds.zip",
+            indexes: [],
+            modifier: function (line){
+                // turn it into an array
+                line = line.split("");
+                var recordType = line.slice(0,1);
+                line=" "+line;
+                switch(recordType){
+                    case "1":
+                        var cage = line.slice(2, 7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.primaryData = {
+                                line1 : line.slice(7,9).trim(),
+                                city1: line.slice(9,45).trim(),
+                                line2: line.slice(45,47).trim(),
+                                city2: line.slice(47,83).trim()
+                            }
+                            doc.save(resume);
+                        });
+                        break;
+                    case "2":
+                        var cage = line.slice(2,7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.address = {
+                                street1: line.slice(7,43).trim(),
+                                street2: line.slice(43,79).trim(),
+                                box: line.slice(79,115).trim(),
+                                city: line.slice(115,151).trim(),
+                                state: line.slice(151,153).trim(),
+                                zip: line.slice(153,163).trim(),
+                                country: line.slice(163,199).trim(),
+                                phone: line.slice(199,199+12).trim()
+                            }
+                            doc.save(resume);
+                        });
+                        break;
+                    case "3":
+                        var cage = line.slice(2,7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.cao = line.slice(7,13).trim();
+                            doc.adp = line.slice(13,19).trim();
+                            doc.save(resume);
+                        });
+                        break;
+                    case "4":
+                        var cage = line.slice(2,7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.codes = {
+                                status: line.slice(7,8).trim(),
+                                assoc: line.slice(8,13).trim(),
+                                type: line.slice(13,14).trim(),
+                                affil: line.slice(14,15).trim(),
+                                size: line.slice(15,16).trim(),
+                                primaryBusiness: line.slice(16,17).trim(),
+                                typeOfBusiness: line.slice(17,18).trim(),
+                                womanOwned: line.slice(18,19).trim()
+                            }
+                            doc.save(resume);
+                        });
+                        break;
+                    case "5":
+                        var cage = line.slice(2,7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.sic = line.slice(7,11).trim();
+                            doc.save(resume);
+                        });
+                        break;
+                    case "6":
+                        var cage = line.slice(2,7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.replacement = line.slice(7,12).trim();
+                            doc.save(resume);
+                        });
+                        break;
+                    case "7":
+                        var cage = line.slice(2,7);
+                        Model.findOne({cage:cage},function(err,doc){
+                            doc.formerData = {
+                                line1 : line.slice(7,9).trim(),
+                                city1: line.slice(9,45).trim(),
+                                line2: line.slice(45,47).trim(),
+                                city2: line.slice(47,47+36).trim()
+                            }
+                            doc.save(resume);
+                        });
+                        break;
+                    default:
+                        resume();
+                }
+            },
+            schema: {
+                code:String,
+                primaryData : {
+                    line1 : String,
+                    city1: String,
+                    line2: String,
+                    city2: String,
+                },
+                address:{
+                    street1: String,
+                    street2: String,
+                    box: String,
+                    city: String,
+                    state: String,
+                    zip: String,
+                    country: String,
+                    phone: String
+                },
+                cao:String,
+                adp:String,
+                codes: {
+                    status: String,
+                    assoc: String,
+                    type: String,
+                    affil: String,
+                    size: String,
+                    primaryBusiness: String,
+                    typeOfBusiness: String,
+                    womanOwned: String
+                },
+                sic:String,
+                replacement:String,
+                formerData:{
+                    line1 : String,
+                    city1: String,
+                    line2: String,
+                    city2: String,
+                }
+            }
+        },
+        {
             name: "characters",
+            skip: true,
             linesPerEntry:2,
             indexes: [{"niin":1}],
             url: "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/chardat.zip",
@@ -132,10 +246,19 @@ function Updater(options){
                         return model.save(resume);
                     }
                 }
+            },
+            schema: {
+                name: String,
+                fsc: String,
+                niin: String,
+                nameCode: String,
+                characters: [{code:String,name:String,value:String}],
+                enacs:[String]
             }
         },
         {
             name: "enacs",
+            skip: true,
             indexes: [{"niin":1}],
             url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/ENAC.txt",
             modifier: function(line){
@@ -150,6 +273,16 @@ function Updater(options){
                     "sos": line.slice(67, 70)
                 });
                 return model.save(resume);
+            },
+            schema :{
+                "fsc":String,
+                "niin":String,
+                "enac_3025":String,
+                "name":String,
+                "DT_NIIN_ASGMT_2180" :String,
+                "EFF_DT_2128" :String,
+                "INC_4080" :String,
+                "sos": String,
             }
         }
     ];
@@ -165,7 +298,7 @@ function Updater(options){
     function documentProcessor(resource,callback){
         ln=0; // reset line count
         const fileName = resource.fileName.slice(0, -4) + ".txt"; // dont process the .zip files
-        const schema = new mongoose.Schema(schemas[resource.name]);
+        const schema = new mongoose.Schema(resource.schema);
         Model = mongoose.model(resource.name, schema); // template for the data.
 
         function checkCollection(entries, next) {
@@ -220,22 +353,24 @@ function Updater(options){
     function processResource(){
         if(resources.length>0){
             var resource = resources.shift();
+            if (resource.skip){
+                processResource()
+            }
+            else{
+                var options = {
+                    progress:true,
+                    verbage:true,
+                    downloadFolder:resourceDirectory
+                };
 
-            var options = {
-                progress:true,
-                verbage:true,
-                downloadFolder:resourceDirectory
-            };
-
-            new Downloader(resource.url,options,function(stats){
-                // console.log(stats);
-                resource.fileName = stats.filePath;
-                documentProcessor(resource,processResource)
-            })
+                new Downloader(resource.url,options,function(stats){
+                    // console.log(stats);
+                    resource.fileName = stats.filePath;
+                    documentProcessor(resource,processResource)
+                })
+            }
         }
-        else{
-            console.log('fin');
-        }
+        else{console.log('fin')}
     }
 
     function update(options,callback){
