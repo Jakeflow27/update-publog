@@ -11,7 +11,7 @@
   "dependencies": {
     "cli-progress": "^2.1.0",
     "file-downloader": "github:Jakeflow27/file-downloader",
-    "line-parser": "github:Jakeflow27/LineParser",
+    "line-parser": "github:jakeflow27/LineParser",
     "mongodb": "^3.1.3",
     "request": "^2.88.0",
     "unzip": "^0.1.11"

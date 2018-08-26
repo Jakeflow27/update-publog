@@ -9,51 +9,55 @@ var MongoClient = require('mongodb').MongoClient;
 var assert = require('assert');
 var util = require('util');
 var Downloader = require("file-downloader");
+var mkdirp = require('mkdirp');
+var path = require("path");
 
-// Mongodb
-var mongoUrl = 'mongodb://localhost:27017';
-var dbName = 'publog';
-var db;
-
-
-var resourceDirectory =__dirname ;
-var forceDownload = false;
+var resourceDirectory = path.join(process.cwd(),"/private/downloads") ;
+var userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36 Avast/68.0.746.60";
+mkdirp(resourceDirectory);
 var isWin = process.platform === "win32";
 request =  request.defaults({jar: true}); // allow cookies by default.
 
-var userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36 Avast/68.0.746.60";
+function Updater(options){
 
-console.log = function log(){fs.writeSync(this._stdout.fd, util.format.apply(null,arguments) + "\n");}
-console.log(resourceDirectory);
+    if(!options){options={}}
+    var mongoUrl = options.dbpath || 'mongodb://localhost:27017';
+    var dbName = options.dbName || 'publog';
+    var overwrite = options.overwrite || false;
+    var db;
+
+    console.log(resourceDirectory); // used for downloads and work
 
 
-if (!Array.prototype.last){
-    Array.prototype.last = function(){
-        return this[this.length - 1];
-    };
-};
+    Array.prototype.last = function(){return this[this.length - 1] };
+    function isEven(num){return num % 2 == 0};
+    function isOdd(num){return num % 2 != 0};
 
-function isEven(num){return num % 2 == 0}
 
-var resources = [
-    {
-        update:true,
-        name: "characters",
-        url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/chardat.zip",
-        parser  : function(resource,callback){
-            var fileName = getRealFileName(resource.url);
-            resource.db.drop();
-            resource.db.createIndex({"niin":1});
-            var bar = new Progress.Bar({}, Progress.Presets.shades_classic);
-            var currentNiin = {};
-            // get the line processor
-            var lp = LineParser(fileName);
-            lp.countLines(function(count){
+    var resources = [
+        {
+            update:true,
+            name: "characters",
+            url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/chardat.zip",
+            parser  : function parser(resource){
 
-                bar.start(count,0);
-                lp.forEachLine(function(line,ln){
-                    console.log("Checking ln#",ln,line);
-                    if(isEven(ln)){
+                var fileName = resource.fileName.slice(0,-4)+".txt"; // dont process the .zip
+                resource.db.drop();
+                resource.db.createIndex({"niin":1});
+                var bar = new Progress.Bar({}, Progress.Presets.shades_classic);
+
+                // start the line processor
+                var lp = new LineParser(fileName);
+                console.log("Loading",fileName);
+
+                var currentNiin = {};
+
+                function modifier(ldata){
+                    var line = ldata.line;
+                    var ln = ldata.ln;
+                    console.log("Checking line",ln,line);
+                    bar.update(ln);
+                    if(isOdd(ln)){
                         var itemNameCode = line.slice(13,18);
                         var endName = 20+parseInt(line.slice(18,20));
                         var name = line.slice(20,endName);
@@ -87,15 +91,13 @@ var resources = [
                                 //console.log('1',i)
                                 if(i+1 >= numMrcs){
                                     // go to next line
-                                    //progress.tick();
-                                    rl.resume();
+                                    //resolve()
                                     break;
                                 }
                             }
                         }
                         else{
-                            //progress.tick();
-                            rl.resume();
+                            return 1;//nextLine();
                         }
                     }
                     else{
@@ -104,107 +106,96 @@ var resources = [
                             for (var i = 2 ; i < numEnacCodes ; i+=2){
                                 currentNiin.enac.push( line.slice(i,i+2));
                                 if (i +2 >= numEnacCodes){
-                                    resource.db.insert(currentNiin,{w:1},function(err,doc){
-                                        // broken at here.
-                                        //console.log('0',i)
-                                        if (err){
-                                            throw JSON.stringify(currentNiin);
-                                        }
-                                        currentNiin={};
-                                        //progress.tick();
-                                        rl.resume();
-                                    })
-                                    break;
+                                    return resource.db.insertOne(currentNiin);
                                 }
                             }
                         }
                         else {
-                            resource.db.insert(currentNiin,function(err,doc){
-                                if (err){
-                                    throw err;
-                                }
-                                currentNiin={};
-                                // progress.tick();
-                                rl.resume();
-                            })
+                            return resource.db.insertOne(currentNiin)
                         }
 
                     }
-                })
-                    .then(function(){
-                        // finished reading all lines
+                }
+
+                lp.countLines(function(count){
+                    console.log("processing",count,"lines...");
+                    bar.start(count,0);
+                    lp.forEachLine(modifier).then(function(stats){
                         bar.stop();
-                        callback();
+                        console.log("processed",stats.lines,"in",stats.duration,"seconds");
                     })
-            })
-        }
-    },
-    {
-        name: "enacs",
-        url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/ENAC.txt",
-        parser : function (resource,callback){
-            var fileName = getFileName(resource.url);
-            console.log(fileName);
-
-            // setup db
-            enacs = db.collection("enacs");
-            enacs.drop();
-            enacs.create_index("niin",unique=True);
-
-            var rl = new readline(fileName);
-            rl.countLines(function(count){
-                rl.on('line',function(line){
-                    data = {
-                        "fsc":line.slice(0,4),
-                        "niin":line.slice(4,9),
-                        "enac_3025":line.slice(14,16),
-                        "name":line.slice(16,48),
-                        "DT_NIIN_ASGMT_2180" : line.slice(48,55),
-                        "EFF_DT_2128" : line.slice(55,62),
-                        "INC_4080" : line.slice(62,67),
-                        "sos": line.slice(67,70)
-                    }
-                    resource.db.insert(data)
                 })
-                rl.on('close',function(){
-                    callback();
+            }
+        },
+        {
+            name: "enacs",
+            url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/ENAC.txt",
+            parser : function (resource,callback){
+                var fileName = resource.fileName;
+                console.log(fileName);
+
+                // setup db
+                enacs = db.collection("enacs");
+                enacs.drop();
+                enacs.create_index({"niin":1});
+
+                var lp = new LineParser(filename);
+                lp.countLines(function(count){
+                    lp.forEachLine(function(line,ln,next){
+                        data = {
+                            "fsc":line.slice(0,4),
+                            "niin":line.slice(4,9),
+                            "enac_3025":line.slice(14,16),
+                            "name":line.slice(16,48),
+                            "DT_NIIN_ASGMT_2180" : line.slice(48,55),
+                            "EFF_DT_2128" : line.slice(55,62),
+                            "INC_4080" : line.slice(62,67),
+                            "sos": line.slice(67,70)
+                        }
+                        return resource.db.insertOne(data)
+                    }).then(function(){
+                        console.log('fin');
+                    })
                 })
-            })
-        }
-    }
-]
-
-function processResource(callback,i){
-    if(!i){i=0}
-    if(i==resources.length){callback()}
-    else{
-        var resource = resources[i];
-
-        if(forceDownload){
-            var path = getFileName(resource.url);
-            console.info('deleting',path);
-            if(fs.existsSync(path)){
-                fs.unlinkSync(path);
             }
         }
+    ]
 
-        new Downloader(resource.url,{progress:true,verbage:true},function(stats){
-            console.log(stats);
-            resource.db = db.collection(resource.name);
-            resource.parser(resource,function(){
-                processResource(callback,i+1)
+    function processResource(){
+        if(resources.length>0){
+            var resource = resources.shift();
+
+            var options = {
+                progress:true,
+                verbage:true,
+                downloadFolder:resourceDirectory
+            };
+
+            new Downloader(resource.url,options,function(stats){
+                // console.log(stats);
+                resource.fileName = stats.filePath;
+                resource.db = db.collection(resource.name);
+                resource.parser(resource,processResource)
             })
-        })
-
+        }
+        else{
+            console.log('fin');
+        }
     }
-}
 
-MongoClient.connect(mongoUrl, function(err, client) {
-    console.log("Connected successfully to server");
-    db = client.db(dbName);
-    processResource(function(){
-        console.log('checked all resources');
-    })
-});
+    function update(options,callback){
+        MongoClient.connect(mongoUrl, function(err, client) {
+            console.log("Connected successfully to server");
+            db = client.db(dbName);
+            processResource(function(){
+                console.log('checked all resources');
+            })
+        });
+    }
+    update();
+}
+Updater()
+module.exports=Updater;
+
 
 

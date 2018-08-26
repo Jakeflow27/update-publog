@@ -11,6 +11,7 @@ Builds a material database from public sources for use in MongoDB
     updater.update();
 
 #Queries
+    
     db.collection("publog").findOne({niin:"01057000},function(err,result){
         if (err){ throw err };
         if (result){
