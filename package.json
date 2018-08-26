@@ -9,11 +9,8 @@
   "author": "jakeflow@gmail.com",
   "license": "ISC",
   "dependencies": {
-    "cli-progress": "^2.1.0",
+    "ascii-progress": "^1.0.5",
     "file-downloader": "github:Jakeflow27/file-downloader",
-    "line-parser": "github:jakeflow27/LineParser",
-    "mongodb": "^3.1.3",
-    "request": "^2.88.0",
-    "unzip": "^0.1.11"
+    "mongoose": "^5.2.9"
   }
 }
