@@ -42,8 +42,6 @@ function Updater(options){
             parser  : function parser(resource){
 
                 var fileName = resource.fileName.slice(0,-4)+".txt"; // dont process the .zip
-                resource.db.drop();
-                resource.db.createIndex({"niin":1});
                 var bar = new Progress.Bar({}, Progress.Presets.shades_classic);
 
                 // start the line processor
@@ -52,10 +50,26 @@ function Updater(options){
 
                 var currentNiin = {};
 
+                function checkCollection(entries,callback){
+                    resource.db.countDocuments({},function(err, count){
+                        console.log("DB entries:",count);
+                        if(count!=entries){
+                            console.log("Rebuilding collection...");
+                            resource.db.drop();
+                            resource.db.createIndex({"niin":1});
+                            callback();
+                        }
+                        else{
+                            console.log("Current collection is up to date.");
+                            return 1;
+                        }
+                    })
+                }
+
                 function modifier(ldata){
                     var line = ldata.line;
                     var ln = ldata.ln;
-                    console.log("Checking line",ln,line);
+                    // console.log("Checking line",ln,line);
                     bar.update(ln);
                     if(isOdd(ln)){
                         var itemNameCode = line.slice(13,18);
@@ -68,7 +82,8 @@ function Updater(options){
                             "name" : name,
                             "nameCode":itemNameCode,
                             "characters" : [],
-                            "enac" : []
+                            //"parsedLines" : [line]
+                            //"enac" : []   <-- this is added later if its needed.
                         };
                         var lastPos=endName+4;
                         if(numMrcs>0){
@@ -90,22 +105,23 @@ function Updater(options){
                                 });
                                 //console.log('1',i)
                                 if(i+1 >= numMrcs){
-                                    // go to next line
-                                    //resolve()
-                                    break;
+                                    return currentNiin;
                                 }
                             }
                         }
                         else{
-                            return 1;//nextLine();
+                            return currentNiin;//nextLine();
                         }
                     }
                     else{
+                        // currentNiin.parsedLines.push(line); // should we keep the raw data?
                         var numEnacCodes = parseInt(line.slice(0,2));
+                        line=line.slice(2);
                         if (numEnacCodes>0){
-                            for (var i = 2 ; i < numEnacCodes ; i+=2){
-                                currentNiin.enac.push( line.slice(i,i+2));
-                                if (i +2 >= numEnacCodes){
+                            if(!currentNiin.enacs){currentNiin.enacs=[]}
+                            for (var i = 0 ; i < numEnacCodes ; i++){
+                                currentNiin.enacs.push( line.slice( i*2 ,(i*2)+2)) ;
+                                if (i+1 >= numEnacCodes){
                                     return resource.db.insertOne(currentNiin);
                                 }
                             }
@@ -118,11 +134,13 @@ function Updater(options){
                 }
 
                 lp.countLines(function(count){
-                    console.log("processing",count,"lines...");
-                    bar.start(count,0);
-                    lp.forEachLine(modifier).then(function(stats){
-                        bar.stop();
-                        console.log("processed",stats.lines,"in",stats.duration,"seconds");
+                    console.log("Document entries:",count);
+                    checkCollection(count,function(){
+                        bar.start(count,0);
+                        lp.forEachLine(modifier).then(function(stats){
+                            bar.stop();
+                            console.log("processed",stats.lines,"in",stats.duration,"seconds");
+                        })
                     })
                 })
             }
