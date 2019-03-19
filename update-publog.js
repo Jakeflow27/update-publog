@@ -44,7 +44,7 @@ function Updater(options){
     var resources = [
         {
             name: "cage",
-            skip:false,
+            skip: true,
             url: "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/cagecds.zip",
             indexes: [{cage:1}],
             linesPerEntry:5,
@@ -108,6 +108,7 @@ function Updater(options){
                             };
                             break;
                         default:
+                            console.log("line:"+line);
                             throw recordType;// resume();
                     }
                     resume();
@@ -158,7 +159,6 @@ function Updater(options){
                     typeOfBusiness: String,
                     womanOwned: String
                 },
-                sic:String,
                 replacement:String,
                 formerData:{
                     line1 : String,
@@ -170,7 +170,7 @@ function Updater(options){
         },
         {
             name: "characters",
-            skip: false,
+            skip: true,
             linesPerEntry:2,
             indexes: [{"niin":1}],
             url: "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/chardat.zip",
@@ -252,7 +252,7 @@ function Updater(options){
         },
         {
             name: "enacs",
-            skip: false,
+            skip: true,
             indexes: [{"niin":1}],
             url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/ENAC.txt",
             modifier: function(line){
@@ -285,7 +285,6 @@ function Updater(options){
             skip: false,
             url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/flisfoi.zip",
             modifier: function(line){
-                line=" "+line;
 
                 function splitByTwo(s){
                     // var parts = [];
@@ -294,19 +293,23 @@ function Updater(options){
                     return s.clean().split(/(?=(?:..)*$)/);
                 }
 
-                const recordType = line.charAt(1);
+                // const recordType = line.charAt(1);
+                const recordType = line.slice(0,2);
                 // The first line of recordType 01 indicates a new document, subsequent lines
                 // are additional tables of that record until recordType 01 occurs again.
                 // recordType 5 occurs multiple times
                 const options = {upsert: true, w: 1}; // w:1 so that we can update the record as needed.
+                let query;
                 switch(recordType){
-                    case "1":
-                        if(doc.niin){Model()}
+                    case "":
+                        resume();
+                        break;
+                    case "01":
+                        //if(doc.niin){Model()}
                         doc = {
                             niin: line.slice(2, 15),
                             nsn: line.slice(6, 15),
                             fsc: line.slice(2, 6),
-                            management:[],
                             identification: {
                                 fiig: line.slice(15, 21).clean(),
                                 inc: line.slice(21, 26).clean(),
@@ -320,12 +323,23 @@ function Updater(options){
                                 esd: line.charAt(58),
                                 pmic: line.charAt(59),
                                 apde: line.charAt(60)
-                            }
+                            },
+                            management : [],
+                            sic : null,
+                            cao : null,
+                            adp : null,
+                            replacement : null,
+                            formerData : {},
+                            codes : {},
+                            moes : [],
+
                         }
-                        resume();
+                        query = { niin : doc.niin };
+                        model = new Model(doc);
+                        model.save(resume);
                         break;
-                    case "2":
-                        doc.moes=[];
+                    case "02":
+                        // doc.moes=[];
                         line=" "+line;
                         const numRecords = line.slice(3,5);
                         for (var i =0; i < numRecords; i++){
@@ -351,12 +365,12 @@ function Updater(options){
                             }
                         }
                         break;
-                    case "3":
+                    case "03":
                         doc.cao = line.slice(7,13).clean();
                         doc.adp = line.slice(13,19).clean();
                         Model.findOneAndUpdate(query, doc, options, resume);
                         break;
-                    case "4":
+                    case "04":
                         doc.codes = {
                             status: line.slice(7,8).clean(),
                             assoc: line.slice(8,13).clean(),
@@ -369,16 +383,16 @@ function Updater(options){
                         }
                         Model.findOneAndUpdate(query, doc, options, resume);
                         break;
-                    case "5":
+                    case "05":
                         niin = line.slice(2,7);
                         doc.sic = line.slice(7,11).clean();
                         Model.findOneAndUpdate(query, doc, options, resume);
                         break;
-                    case "6":
+                    case "06":
                         doc.replacement = line.slice(7,12).clean();
                         Model.findOneAndUpdate(query, doc, options, resume);
                         break;
-                    case "7":
+                    case "07":
                         doc.formerData = {
                             line1 : line.slice(7,9).clean(),
                             city1: line.slice(9,45).clean(),
@@ -387,19 +401,123 @@ function Updater(options){
                         }
                         Model.findOneAndUpdate(query, doc, options, resume);
                         break;
+                    case "09":
+                        //line:09 CT 011790Z04720  W671Z9AAZWAIRCRAFT PARTS NOI
+                        // INTEGRITY CODE						3		INTGTY_CD_0864
+                        // ORIGINATING ACTIVITY CODE				4-5		ORIG_ACTY_CD_4210
+                        // RAIL VARIANCE						6		RAIL_VARI_CD_4760
+                        // NMFC ITEM NUMBER					7-12		NMFC_2850
+                        // (NATIONAL MOTOR FRIEGHT 
+                        // CLASSIFICATION NUMBER)
+                        // NMFC SUB_ITEM NUMBER				13		SUB_ITM_NBR_0861
+                        // UNIFORM FREIGHT
+                        // CLASSIFICATION (UFC)					14-18		UFC_CD_MODF_3040
+                        // HAZARDOUS MATERIEL CODE				19-20		HMC_2720
+                        // LESS THAN CARLOAD					21		LCL_CD_2760
+                        // WATER COMMODITY CODE				22-24		WRT_CMDTY_CD_9275
+                        // TYPE OF CARGO CODE					25		TYPE_CGO_CD_9260
+                        // SPECIAL HANDLING CODE				26		SP_HDLG_CD_9240
+                        // AIR DIMENSION CODE					27		AIR_DIM_CD_9220
+                        // AIR COMMODITY/SPECIAL
+                        // HANDLING CODE						28-29		AIR_CMTY_HDLG_9215
+                        // LESS THAN TRUCKLOAD				30		CLAS_RTNG_CD_2770
+                        // FREIGHT DESCRIPTION					31-65		FRT_DESC_4020
+                        // (VARIABLE, UP TO 35 POS)
+                        doc.integrity = {
+                            INTEGRITY_CODE : line.charAt(3),
+                            ORIGINATING_ACTIVITY_CODE : line.slice(3,6),
+                            RAIL_VARIANCE : line.charAt(6),
+                            NMFC_ITEM_NUMBER : line.slice(6,13),
+                            NMFC_SUB_ITEM_NUMBER : line.charAt(13),
+                            UNIFORM_FREIGHT_CLASSIFICATION : line.slice(13,18),
+                            HAZARDOUS_MATERIEL_CODE :   line.slice(19,21),
+                            LESS_THAN_CARLOAD : line.charAt(21),
+                            WATER_COMMODITY_CODE : line.slice(22, 25),
+                            TYPE_OF_CARGO_CODE : line.charAt(25),
+                            SPECIAL_HANDLING_CODE : line.charAt(26),
+                            AIR_DIMENSION_CODE : line.charAt(27),
+                            SPECIAL_HANDLING_CODE : line.slice(28,30),
+                            LESS_THAN_TRUCKLOAD : line.charAt(30),
+                            FREIGHT_DESCRIPTION : line.slice(31,66).clean(),
+                        }	
+                        Model.findOneAndUpdate(query, doc, options, resume);
+                        break;
                     default:
-                        resume();
+                        console.log("line:"+line);
+                        console.error("Unaccounted record: " +recordType );
+                        process.exit(1);
+                        //resume();
                 }
             },
             schema :{
-                "fsc":String,
-                "niin":String,
-                "enac_3025":String,
-                "name":String,
-                "DT_NIIN_ASGMT_2180" :String,
-                "EFF_DT_2128" :String,
-                "INC_4080" :String,
-                "sos": String,
+                niin: String,
+                nsn: String,
+                fsc: String,
+                identification: {
+                    fiig: String,
+                    inc: String,
+                    name: String,
+                    criticality: String,
+                    typ: String,
+                    rpdmrc: String,
+                    dmil: String,
+                    dateAssigned: Date,// 200603
+                    hmic: String,
+                    esd: String,
+                    pmic: String,
+                    apde: String
+                },
+                management : [],
+                sic : String,
+                cao : String,
+                adp : String,
+                replacement : String,
+                formerData : {
+                    line1 : String,
+                    city1: String,
+                    line2: String,
+                    city2: String
+                },
+                codes : {
+                    status: String,
+                    assoc: String,
+                    typ: String,
+                    affil: String,
+                    size: String,
+                    primaryBusiness: String,
+                    typeOfBusiness: String,
+                    womanOwned: String
+                },
+                moes : [{
+                    rule : String, //MOE_RULE_NBR_8290 5-8 MOE_RULE_NBR_8290
+                    amc: String,//ACQUISITION METHOD CODE 9 AMC_2871
+                    amsc: String,//ACQUISITION METHOD SUFFIX CODE 10 AMSC_2876
+                    nimsc: String,//NONCONSUMABLE ITEM MATERIAL SUPPORT CODE 11	NIMSC_0076
+                    effectiveDate: String,//DATE, EFFECTIVE, LOGISTICS ACTION 12-16 EFF_DT_2128
+                    imc: String,//ITEM MANAGEMENT CODE 17 IMC_2744
+                    imcActivity: String,//ITEM MANAGEMENT CODING ACTIVITY 18-19	IMC_ACTY_2748
+                    dsor: String,//DEPOT SOURCE OF REPAIR CODE 20-27	DSOR_0903 (4 2-POSITION CODES)
+                    suppCollab: String,//SUPPLEMENTARY COLLABORATOR 28-45 SUPPLM_COLLBR_2533 (MAX 9 2-POSITION CODES)
+                    suppReceiver: String,//SUPPLEMENTARY RECEIVER 46-63 SUPPLM_RCVR_2534 (MAX 9 2-POSITION CODES)
+                    aac: String,//ACQUISITION ADVICE CODE 64 AAC_2507
+                }],
+                integrity : {
+                    INTEGRITY_CODE : String,
+                    ORIGINATING_ACTIVITY_CODE : String,
+                    RAIL_VARIANCE : String,
+                    NMFC_ITEM_NUMBER : String,
+                    NMFC_SUB_ITEM_NUMBER : String,
+                    UNIFORM_FREIGHT_CLASSIFICATION : String,
+                    HAZARDOUS_MATERIEL_CODE :   String,
+                    LESS_THAN_CARLOAD : String,
+                    WATER_COMMODITY_CODE : String,
+                    TYPE_OF_CARGO_CODE : String,
+                    SPECIAL_HANDLING_CODE : String,
+                    AIR_DIMENSION_CODE : String,
+                    SPECIAL_HANDLING_CODE : String,
+                    LESS_THAN_TRUCKLOAD : String,
+                    FREIGHT_DESCRIPTION : String,
+                }
             }
         }
     ];
@@ -411,6 +529,13 @@ function Updater(options){
     function resume(err){
         if (err) throw err;
         rl.resume()
+    }
+    function getDate(s){
+        //200603
+        if (s.length==6){
+            return new Date( Number(s.slice(0,4)), Number(s.slice(4)-1));
+        }
+        
     }
     function noblank(value){
         // helper to delete null values from mongoose schemas.
