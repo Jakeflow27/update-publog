@@ -44,7 +44,7 @@ function Updater(options){
     var resources = [
         {
             name: "cage",
-            skip: true,
+            skip: false,
             url: "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/cagecds.zip",
             indexes: [{cage:1}],
             linesPerEntry:5,
@@ -170,7 +170,7 @@ function Updater(options){
         },
         {
             name: "characters",
-            skip: true,
+            skip: false,
             linesPerEntry:2,
             indexes: [{"niin":1}],
             url: "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/chardat.zip",
@@ -252,7 +252,7 @@ function Updater(options){
         },
         {
             name: "enacs",
-            skip: true,
+            skip: false,
             indexes: [{"niin":1}],
             url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/ENAC.txt",
             modifier: function(line){
@@ -283,7 +283,7 @@ function Updater(options){
             name: "flis",
             indexes: [{"niin":1},{"fsc":1}],
             skip: false,
-            url : "http://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/flisfoi.zip",
+            url : "https://www.dla.mil/Portals/104/Documents/InformationOperations/LogisticsInformationServices/FOIA/flisfoi%20032719.zip",
             modifier: function(line){
 
                 function splitByTwo(s){
