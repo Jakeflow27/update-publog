@@ -545,7 +545,9 @@ function Updater(options){
     }
     function documentProcessor(resource,callback){
         ln=0; // reset line count
-        const fileName = resource.fileName.slice(0, -4).toUpperCase() + ".txt"; // dont process the .zip files
+        var parts = resource.fileName.split(/[/\\]/);
+        var lastPart = parts.pop().slice(0, -4).toUpperCase() + ".txt";
+        const fileName = parts.join("/")+lastPart; // dont process the .zip files
         const schema = new mongoose.Schema(resource.schema);
         Model = mongoose.model(resource.name, schema); // template for the data.
 
